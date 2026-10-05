@@ -1,0 +1,100 @@
+<div class="login">
+  <!-- Form side -->
+  <section class="form-side">
+    <div class="form-wrap">
+      <div class="logo">
+        <span class="logo-icon"><lucide-icon [img]="icons.Mail" [size]="24" /></span>
+        <span class="logo-text">{{ 'app.name' | t }}</span>
+        <button type="button" class="lang-btn" (click)="i18n.toggle()" [title]="'lang.switchTitle' | t">
+          <lucide-icon [img]="icons.Languages" [size]="16" /> {{ 'lang.switchTo' | t }}
+        </button>
+      </div>
+
+      <div class="heading">
+        <h1>{{ 'login.welcome' | t }}</h1>
+        <p>{{ 'login.subtitle' | t }}</p>
+      </div>
+
+      <form class="form" [class.shake]="shake" (ngSubmit)="submit()" (animationend)="shake = false" novalidate>
+        @if (error) {
+          <div class="error" role="alert">
+            <lucide-icon [img]="icons.CircleAlert" [size]="18" />
+            <span>{{ error.key | t: error.params }}</span>
+          </div>
+        }
+
+        <label class="label" for="username">{{ 'login.username' | t }}</label>
+        <div class="field" [class.invalid]="showUsernameError">
+          <lucide-icon class="field-icon" [img]="icons.User" [size]="18" />
+          <input #usernameInput id="username" name="username" type="text" autocomplete="username" maxlength="200"
+                 [(ngModel)]="username" (blur)="usernameTouched = true" [attr.aria-invalid]="showUsernameError"
+                 aria-describedby="username-error" [disabled]="loading" [placeholder]="'login.usernamePlaceholder' | t" autofocus />
+        </div>
+        @if (showUsernameError) {
+          <p class="field-error" id="username-error"><lucide-icon [img]="icons.CircleAlert" [size]="14" /> {{ 'login.usernameRequired' | t }}</p>
+        }
+
+        <label class="label" for="password">{{ 'login.password' | t }}</label>
+        <div class="field" [class.invalid]="showPasswordError">
+          <lucide-icon class="field-icon" [img]="icons.Lock" [size]="18" />
+          <input #passwordInput id="password" name="password" [type]="showPassword ? 'text' : 'password'" autocomplete="current-password" maxlength="200"
+                 [(ngModel)]="password" (blur)="passwordTouched = true" [attr.aria-invalid]="showPasswordError"
+                 aria-describedby="password-error" [disabled]="loading" [placeholder]="'login.passwordPlaceholder' | t"
+                 (keydown)="onKey($event)" (keyup)="onKey($event)" />
+          <button type="button" class="toggle" (click)="showPassword = !showPassword"
+                  [title]="(showPassword ? 'login.hidePassword' : 'login.showPassword') | t">
+            <lucide-icon [img]="showPassword ? icons.EyeOff : icons.Eye" [size]="18" />
+          </button>
+        </div>
+        @if (showPasswordError) {
+          <p class="field-error" id="password-error"><lucide-icon [img]="icons.CircleAlert" [size]="14" /> {{ 'login.passwordRequired' | t }}</p>
+        }
+        @if (capsLock) {
+          <p class="hint"><lucide-icon [img]="icons.KeyRound" [size]="14" /> {{ 'login.capsLock' | t }}</p>
+        }
+
+        <button class="submit" type="submit" [disabled]="loading">
+          @if (loading) {
+            <lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="20" /> {{ 'login.submitting' | t }}
+          } @else {
+            {{ 'login.submit' | t }} <lucide-icon class="flip" [img]="icons.LogIn" [size]="20" />
+          }
+        </button>
+      </form>
+
+      <p class="secure"><lucide-icon [img]="icons.ShieldCheck" [size]="15" /> {{ 'login.secure' | t }}</p>
+    </div>
+
+    <footer class="footer">{{ 'login.rights' | t }} © {{ year }} <span dir="ltr">Skey ERP</span></footer>
+  </section>
+
+  <!-- Showcase side -->
+  <section class="showcase" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="grid-pattern"></div>
+
+    <div class="showcase-content">
+      <div class="anim-card">
+        <app-lottie class="anim" [data]="sendingAnimation" [loop]="true" />
+      </div>
+      <h2>{{ 'login.showcaseTitle1' | t }}<br />{{ 'login.showcaseTitle2' | t }}</h2>
+      <p>{{ 'login.showcaseText' | t }}</p>
+
+      <ul class="features">
+        <li>
+          <span class="feature-icon"><lucide-icon [img]="icons.FileSpreadsheet" [size]="18" /></span>
+          <div><strong>{{ 'login.feature1Title' | t }}</strong><span>{{ 'login.feature1Text' | t }}</span></div>
+        </li>
+        <li>
+          <span class="feature-icon"><lucide-icon [img]="icons.PenLine" [size]="18" /></span>
+          <div><strong>{{ 'login.feature2Title' | t }}</strong><span>{{ 'login.feature2Text' | t }}</span></div>
+        </li>
+        <li>
+          <span class="feature-icon"><lucide-icon [img]="icons.ChartColumn" [size]="18" /></span>
+          <div><strong>{{ 'login.feature3Title' | t }}</strong><span>{{ 'login.feature3Text' | t }}</span></div>
+        </li>
+      </ul>
+    </div>
+  </section>
+</div>

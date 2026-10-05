@@ -1,0 +1,19 @@
+{
+  "name": "bulk-email-server",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "disposable-email-domains": "^1.0.62",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "imapflow": "^2.2.4",
+    "mailparser": "^3.9.34",
+    "nodemailer": "^6.9.16",
+    "sanitize-html": "^2.18.0"
+  }
+}

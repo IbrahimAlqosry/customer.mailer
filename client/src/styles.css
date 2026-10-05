@@ -1,0 +1,68 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Cairo', Tahoma, Arial, sans-serif;
+  background: #f4f6fa;
+  color: #172033;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea { font-family: inherit; }
+
+/* ---------- Rich text editor (Quill) ---------- */
+.editor .ql-toolbar.ql-snow {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px 8px 0 0;
+  background: #f9fafb;
+  padding: 6px 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0;
+}
+.editor .ql-toolbar.ql-snow .ql-formats { display: inline-flex; align-items: center; margin: 0; padding: 0 6px; }
+.editor .ql-toolbar.ql-snow .ql-formats + .ql-formats { border-inline-start: 1px solid #e4e7ec; }
+.editor .ql-snow .ql-picker.ql-expanded .ql-picker-label { color: #2952cc; border-color: #d0d5dd; border-radius: 6px; }
+.editor .ql-snow .ql-picker-options { border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14) !important; }
+.editor .ql-snow.ql-toolbar button:hover, .editor .ql-snow .ql-picker-label:hover { color: #2952cc; }
+/* Quill puts its dropdown arrow on the right; flip it when the UI is right-to-left. */
+[dir="rtl"] .editor .ql-snow .ql-picker:not(.ql-color-picker):not(.ql-icon-picker) .ql-picker-label { padding: 0 6px 0 18px; text-align: right; }
+[dir="rtl"] .editor .ql-snow .ql-picker:not(.ql-color-picker):not(.ql-icon-picker) .ql-picker-label svg { right: auto; left: 0; }
+[dir="rtl"] .editor .ql-snow .ql-picker-item { text-align: right; }
+.editor .ql-container.ql-snow {
+  border: 1px solid #d0d5dd;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: #fff;
+  font-family: 'Cairo', Tahoma, Arial, sans-serif;
+  font-size: 16px;
+}
+/* The writing area follows the email language (not the UI language): RTL by default, .ltr for English. */
+.editor .ql-editor { min-height: 200px; max-height: 420px; line-height: 1.7; direction: rtl; text-align: right; }
+.editor.ltr .ql-editor { direction: ltr; text-align: left; }
+/* Quill only mirrors lists for its own RTL class; do the same for RTL emails. */
+.editor:not(.ltr) .ql-editor ol { padding-left: 0; padding-right: 1.5em; }
+.editor:not(.ltr) .ql-editor li { padding-left: 0; padding-right: 1.5em; }
+.editor:not(.ltr) .ql-editor li > .ql-ui:before { margin-left: 0.3em; margin-right: -1.5em; text-align: left; }
+.editor .ql-editor.ql-blank::before { right: 15px; left: 15px; font-style: normal; color: #98a2b3; }
+.editor .ql-editor p { margin: 0; }
+.editor:focus-within .ql-toolbar.ql-snow,
+.editor:focus-within .ql-container.ql-snow { border-color: #2952cc; }
+.editor .ql-disabled .ql-editor { background: #f2f4f7; }
+.editor.invalid .ql-toolbar.ql-snow,
+.editor.invalid .ql-container.ql-snow { border-color: #c8322f; }
+
+/* Font & size pickers: wide enough for the labels, each font shown in its own face. */
+.editor .ql-snow .ql-picker.ql-font { width: 96px; }
+.editor .ql-snow .ql-picker.ql-size { width: 66px; }
+.editor .ql-snow .ql-picker-options { max-height: 260px; overflow-y: auto; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-label::before,
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item::before,
+.editor .ql-snow .ql-picker.ql-size .ql-picker-label::before,
+.editor .ql-snow .ql-picker.ql-size .ql-picker-item::before { content: attr(data-label); }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Cairo"]::before { font-family: 'Cairo'; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Tajawal"]::before { font-family: 'Tajawal'; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Amiri"]::before { font-family: 'Amiri'; font-size: 15px; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Tahoma"]::before { font-family: Tahoma; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Arial"]::before { font-family: Arial; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Verdana"]::before { font-family: Verdana; }
+.editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Georgia"]::before { font-family: Georgia; }
+.editor .ql-snow .ql-picker.ql-size .ql-picker-item[data-value]::before { font-size: 13px; }

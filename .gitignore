@@ -1,0 +1,23 @@
+# Secrets: SMTP password, admin password, token signing secret. Never commit.
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+.angular/
+
+# Deployment output from publish.ps1 (contains a copy of .env)
+publish/
+*.zip
+
+# Runtime logs
+logs/
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

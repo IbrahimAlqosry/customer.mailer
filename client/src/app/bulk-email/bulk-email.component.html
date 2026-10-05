@@ -1,0 +1,462 @@
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-icon"><lucide-icon [img]="icons.Mail" [size]="26" /></span>
+      <div>
+        <h1>{{ 'app.name' | t }}</h1>
+        <p>{{ 'app.tagline' | t }}</p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      @if (serverDown) {
+        <span class="server-pill down"><lucide-icon [img]="icons.CircleX" [size]="16" /> {{ 'header.serverDown' | t }}</span>
+      } @else if (server) {
+        <span class="server-pill" [class.down]="!server.smtpReady" [title]="server.from">
+          <lucide-icon [img]="server.smtpReady ? icons.CircleCheck : icons.TriangleAlert" [size]="16" />
+          {{ (server.smtpReady ? 'header.ready' : 'header.smtpIncomplete') | t }}
+        </span>
+      }
+      <button class="lang-btn" (click)="i18n.toggle()" [title]="'lang.switchTitle' | t">
+        <lucide-icon [img]="icons.Languages" [size]="16" /> {{ 'lang.switchTo' | t }}
+      </button>
+      <div class="user-chip">
+        <span class="avatar">{{ auth.username().charAt(0).toUpperCase() }}</span>
+        <span class="user-name">{{ auth.username() }}</span>
+        <button class="logout" [title]="'header.logout' | t" (click)="logout()">
+          <lucide-icon class="flip" [img]="icons.LogOut" [size]="17" />
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <!-- Stats -->
+  <section class="stats">
+    <div class="stat">
+      <span class="stat-icon"><lucide-icon [img]="icons.Users" [size]="22" /></span>
+      <div>
+        <span class="stat-label">{{ 'stats.total' | t }}</span>
+        <span class="stat-value">{{ rows.length }}</span>
+      </div>
+    </div>
+    <div class="stat success">
+      <span class="stat-icon"><lucide-icon [img]="icons.CircleCheck" [size]="22" /></span>
+      <div>
+        <span class="stat-label">{{ 'stats.sent' | t }}</span>
+        <span class="stat-value">{{ count('sent') }}</span>
+      </div>
+    </div>
+    <div class="stat danger">
+      <span class="stat-icon"><lucide-icon [img]="icons.CircleX" [size]="22" /></span>
+      <div>
+        <span class="stat-label">{{ 'stats.failed' | t }}</span>
+        <span class="stat-value">{{ failedCount }}</span>
+      </div>
+    </div>
+    <div class="stat muted">
+      <span class="stat-icon"><lucide-icon [img]="icons.Clock" [size]="22" /></span>
+      <div>
+        <span class="stat-label">{{ 'stats.waiting' | t }}</span>
+        <span class="stat-value">{{ waiting }}</span>
+      </div>
+    </div>
+  </section>
+
+  @if (run?.limit && !sending && !showModal) {
+    <div class="limit-bar" role="status">
+      <lucide-icon [img]="icons.TriangleAlert" [size]="18" />
+      <span>{{ 'limit.bar' | t: { remaining: waiting } }}</span>
+    </div>
+  }
+
+  @if (run && !sending && !showModal) {
+    <div class="run-bar">
+      <span>
+        {{ 'run.last' | t }} <strong class="ok">{{ run.sent }}</strong> {{ 'run.succeeded' | t }}
+        @if (run.failed > 0) { · <strong class="bad">{{ run.failed }}</strong> {{ 'run.failed' | t }} }
+        <span class="bounce-status" [title]="'bounce.hint' | t">
+          <lucide-icon [img]="icons.MailX" [size]="15" />
+          @if (bounceChecking) {
+            {{ 'bounce.checking' | t }}
+          } @else if (bounceUnavailable) {
+            <span class="bad">{{ 'bounce.unavailable' | t }}</span>
+          } @else if (lastBounceCheck) {
+            @if (bounceCount > 0) { <strong class="bad">{{ 'bounce.found' | t: { n: bounceCount } }}</strong> }
+            @else { {{ 'bounce.none' | t }} }
+            · {{ 'bounce.lastCheck' | t: { time: lastBounceCheckTime } }}
+          } @else {
+            {{ 'bounce.title' | t }}
+          }
+        </span>
+      </span>
+      <div class="run-actions">
+        <button class="btn btn-outline btn-sm" (click)="checkBounces()" [disabled]="bounceChecking">
+          <lucide-icon [class.spin]="bounceChecking" [img]="icons.RefreshCw" [size]="16" /> {{ 'bounce.checkNow' | t }}
+        </button>
+        <button class="btn btn-outline btn-sm" (click)="exportReport()">
+          <lucide-icon [img]="icons.Download" [size]="16" /> {{ 'run.report' | t }}
+        </button>
+        @if (count('failed') > 0) {
+          <button class="btn btn-outline-danger btn-sm" (click)="retryFailed()">
+            <lucide-icon [img]="icons.RotateCcw" [size]="16" /> {{ 'run.retry' | t }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="layout">
+    <!-- Compose panel -->
+    <section class="card compose">
+      <div class="step" #fileSection>
+        <span class="step-num"><lucide-icon [img]="icons.FileSpreadsheet" [size]="16" /></span>
+        <h2>{{ 'file.step' | t }}</h2>
+      </div>
+
+      @if (!fileName) {
+        <label class="dropzone" [class.dragging]="dragging" [class.invalid]="!!fileMessage"
+               (dragover)="onDragOver($event)" (dragleave)="dragging = false" (drop)="onDrop($event)">
+          <input type="file" accept=".xlsx,.xls,.csv" (change)="onFileInput($event)" hidden />
+          <span class="dropzone-icon"><lucide-icon [img]="icons.CloudUpload" [size]="30" /></span>
+          <strong>{{ 'file.drop' | t }}</strong>
+          <span>{{ 'file.dropHint' | t }}</span>
+        </label>
+      } @else {
+        <div class="file-chip">
+          <span class="file-icon"><lucide-icon [img]="icons.FileSpreadsheet" [size]="22" /></span>
+          <div class="file-info">
+            <strong>{{ fileName }}</strong>
+            <span>{{ 'file.customers' | t: { n: rows.length } }}
+              @if (skipped > 0) { · <span class="warn">{{ 'file.skipped' | t: { n: skipped } }}</span> }
+            </span>
+            @if (verifying) {
+              <span class="verify-state"><lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="13" /> {{ 'verify.checking' | t }}</span>
+            } @else if (verifyFailed) {
+              <span class="verify-state warn">{{ 'verify.failed' | t }}
+                <button type="button" class="link-btn" (click)="retryVerify()">{{ 'verify.retry' | t }}</button>
+              </span>
+            }
+          </div>
+          <button class="icon-btn" [title]="'file.remove' | t" (click)="clearFile()" [disabled]="sending">
+            <lucide-icon [img]="icons.Trash2" [size]="16" />
+          </button>
+        </div>
+      }
+      @if (fileMessage; as e) {
+        <p class="field-error" role="alert"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+      }
+
+      <div class="step">
+        <span class="step-num"><lucide-icon [img]="icons.PenLine" [size]="16" /></span>
+        <h2>{{ 'compose.step' | t }}</h2>
+      </div>
+
+      <span class="field-label" id="email-lang-label">{{ 'compose.language' | t }}</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="email-lang-label">
+        @for (lang of languages; track lang) {
+          <button type="button" role="radio" [attr.aria-checked]="emailLang === lang" [class.active]="emailLang === lang"
+                  [disabled]="sending" (click)="setEmailLang(lang)">
+            {{ languageNames[lang] }}
+          </button>
+        }
+      </div>
+      <p class="field-hint">{{ 'compose.languageHint' | t }}</p>
+
+      <div class="label-row">
+        <label class="field-label" for="subject">{{ 'compose.subject' | t }} <span class="required" aria-hidden="true">*</span></label>
+        <span class="counter" [class.over]="subjectLength > limits.subject" dir="ltr">{{ subjectLength }}/{{ limits.subject }}</span>
+      </div>
+      <input #subjectInput id="subject" class="input" type="text" [dir]="emailDir" [(ngModel)]="subject" (ngModelChange)="persist()"
+             (blur)="subjectTouched = true" [class.invalid]="showSubjectError" [attr.aria-invalid]="showSubjectError"
+             aria-describedby="subject-error" [disabled]="sending" [placeholder]="'compose.subjectPlaceholder' | t" />
+      @if (showSubjectError && subjectError; as e) {
+        <p class="field-error" id="subject-error" role="alert"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+      }
+
+      <label class="field-label">{{ 'compose.body' | t }} <span class="required" aria-hidden="true">*</span></label>
+      <quill-editor class="editor" [class.ltr]="emailDir === 'ltr'" [class.invalid]="showBodyError" [(ngModel)]="body" [disabled]="sending" format="html"
+                    (onBlur)="bodyTouched = true"
+                    [placeholder]="'compose.bodyPlaceholder' | t"
+                    (onEditorCreated)="onEditorCreated($event)" (onContentChanged)="onEditorChanged($event)">
+        <div quill-editor-toolbar>
+          <span class="ql-formats">
+            <select class="ql-font" [title]="'editor.font' | t">
+              @for (f of fonts; track f.value) {
+                <option [value]="f.value" [selected]="f.value === fonts[0].value">{{ f.label }}</option>
+              }
+            </select>
+            <select class="ql-size" [title]="'editor.size' | t">
+              @for (s of sizes; track s) {
+                <option [value]="s" [selected]="s === '16px'">{{ s }}</option>
+              }
+            </select>
+          </span>
+          <span class="ql-formats">
+            <button class="ql-bold" [title]="'editor.bold' | t"></button>
+            <button class="ql-italic" [title]="'editor.italic' | t"></button>
+            <button class="ql-underline" [title]="'editor.underline' | t"></button>
+            <button class="ql-strike" [title]="'editor.strike' | t"></button>
+          </span>
+          <span class="ql-formats">
+            <select class="ql-color" [title]="'editor.color' | t"></select>
+            <select class="ql-background" [title]="'editor.background' | t"></select>
+          </span>
+          <span class="ql-formats">
+            <select class="ql-align" [title]="'editor.align' | t">
+              <option value="right" selected></option>
+              <option value="center"></option>
+              <option value="left"></option>
+              <option value="justify"></option>
+            </select>
+            <button class="ql-list" value="ordered" [title]="'editor.ordered' | t"></button>
+            <button class="ql-list" value="bullet" [title]="'editor.bullet' | t"></button>
+          </span>
+          <span class="ql-formats">
+            <button class="ql-link" [title]="'editor.link' | t"></button>
+            <button class="ql-clean" [title]="'editor.clean' | t"></button>
+          </span>
+        </div>
+      </quill-editor>
+      @if (showBodyError && bodyError; as e) {
+        <p class="field-error" role="alert"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+      }
+
+      <div class="preview">
+        <div class="preview-head">
+          <span class="preview-label"><lucide-icon [img]="icons.Eye" [size]="14" /> {{ 'compose.preview' | t }}</span>
+          <span class="preview-subject" [dir]="emailDir">{{ subject || ('compose.noSubject' | t) }}</span>
+        </div>
+        <div class="preview-body" [dir]="emailDir">
+          <p class="greeting">{{ previewGreeting }}</p>
+          @if (bodyText) {
+            <div class="preview-html" [innerHTML]="previewHtml"></div>
+          } @else {
+            <p class="preview-empty">{{ 'compose.bodyEmpty' | t }}</p>
+          }
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" (click)="send()" [disabled]="sending">
+        @if (sending) {
+          <lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="18" /> {{ 'compose.sending' | t }}
+        } @else {
+          <lucide-icon class="flip" [img]="icons.Send" [size]="18" />
+          {{ sendableCount > 0 ? ('compose.sendTo' | t: { n: sendableCount }) : ('compose.send' | t) }}
+        }
+      </button>
+    </section>
+
+    <!-- Recipients -->
+    <section class="card recipients">
+      <div class="recipients-head">
+        <div class="step flat">
+          <span class="step-num"><lucide-icon [img]="icons.Users" [size]="16" /></span>
+          <h2>{{ 'recipients.title' | t }}</h2>
+        </div>
+        <div class="search-wrap">
+          <lucide-icon class="search-icon" [img]="icons.Search" [size]="16" />
+          <input class="input search" type="search" [(ngModel)]="search" [placeholder]="'recipients.search' | t" />
+        </div>
+      </div>
+
+      @if (issueCount > 0 && !verifying) {
+        <div class="issues-banner">
+          <lucide-icon [img]="icons.ShieldAlert" [size]="20" />
+          <div class="issues-text">
+            <strong>{{ 'issues.summary' | t: { n: issueCount } }}</strong>
+            <span>{{ 'issues.detail' | t: { invalid: invalidCount, review: reviewCount } }}</span>
+          </div>
+          <div class="issues-actions">
+            @if (filter !== 'issues') {
+              <button class="btn btn-outline btn-sm" (click)="filter = 'issues'">{{ 'issues.show' | t }}</button>
+            }
+            @if (invalidCount > 0 && !sending) {
+              <button class="btn btn-outline-danger btn-sm" (click)="removeInvalid()">
+                <lucide-icon [img]="icons.Trash2" [size]="15" /> {{ 'issues.removeInvalid' | t: { n: invalidCount } }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="tabs">
+        <button [class.active]="filter === 'all'" (click)="filter = 'all'">{{ 'recipients.all' | t }} <span>{{ rows.length }}</span></button>
+        <button [class.active]="filter === 'sent'" (click)="filter = 'sent'">{{ 'recipients.sent' | t }} <span class="s-sent">{{ count('sent') }}</span></button>
+        <button [class.active]="filter === 'failed'" (click)="filter = 'failed'">{{ 'recipients.failed' | t }} <span class="s-failed">{{ failedCount }}</span></button>
+        <button [class.active]="filter === 'pending'" (click)="filter = 'pending'">{{ 'recipients.pending' | t }} <span>{{ waiting }}</span></button>
+        @if (issueCount > 0) {
+          <button [class.active]="filter === 'issues'" (click)="filter = 'issues'">{{ 'recipients.issues' | t }} <span class="s-issues">{{ issueCount }}</span></button>
+        }
+      </div>
+
+      @if (rows.length === 0) {
+        <div class="empty">
+          <span class="empty-icon"><lucide-icon [img]="icons.FileSpreadsheet" [size]="34" /></span>
+          <p>{{ 'recipients.empty' | t }}</p>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th>{{ 'recipients.name' | t }}</th>
+                <th>{{ 'recipients.email' | t }}</th>
+                <th>{{ 'recipients.status' | t }}</th>
+                <th class="col-act"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of visibleRows; track r.email) {
+                <tr [class.row-failed]="r.status === 'failed'" [class.row-sending]="r.status === 'sending'">
+                  <td class="col-num">{{ rows.indexOf(r) + 1 }}</td>
+                  <td class="name">{{ r.name || '—' }}</td>
+                  <td class="email">
+                    <span dir="ltr">{{ r.email }}</span>
+                    @if (r.issue; as issue) {
+                      <div class="issue" [class.warning]="issue.severity === 'warning'">
+                        <lucide-icon [img]="issue.severity === 'error' ? icons.CircleX : icons.TriangleAlert" [size]="13" />
+                        <span>{{ issueLabel(issue) }}</span>
+                        @if (issue.suggestion) {
+                          <span class="suggestion">{{ 'issue.suggest' | t: { email: issue.suggestion } }}</span>
+                        }
+                        @if (!sending) {
+                          <span class="issue-actions">
+                            @if (issue.suggestion) {
+                              <button type="button" class="chip-btn" (click)="applySuggestion(r)">
+                                <lucide-icon [img]="icons.Wand" [size]="12" /> {{ 'issue.fix' | t }}
+                              </button>
+                            }
+                            @if (issue.severity === 'warning') {
+                              <button type="button" class="chip-btn ghost" (click)="keepAddress(r)">{{ 'issue.keep' | t }}</button>
+                            }
+                          </span>
+                        }
+                      </div>
+                    }
+                  </td>
+                  <td class="status">
+                    <span [class]="'badge badge-' + displayStatus(r)">
+                      @switch (displayStatus(r)) {
+                        @case ('sending') { <lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="13" /> }
+                        @case ('sent') { <lucide-icon [img]="icons.CircleCheck" [size]="13" /> }
+                        @case ('failed') { <lucide-icon [img]="icons.CircleX" [size]="13" /> }
+                        @case ('bounced') { <lucide-icon [img]="icons.MailX" [size]="13" /> }
+                        @case ('invalid') { <lucide-icon [img]="icons.CircleX" [size]="13" /> }
+                        @case ('review') { <lucide-icon [img]="icons.TriangleAlert" [size]="13" /> }
+                        @default { <lucide-icon [img]="icons.Clock" [size]="13" /> }
+                      }
+                      {{ 'status.' + displayStatus(r) | t }}
+                    </span>
+                    @if (r.failure; as f) {
+                      <div class="failure">
+                        <span class="failure-reason">{{ failureText(f) }}</span>
+                        @if (f.detail) { <span class="failure-detail" dir="ltr" [title]="f.detail">{{ f.detail }}</span> }
+                      </div>
+                    }
+                  </td>
+                  <td class="col-act">
+                    @if (r.status === 'pending' && !sending) {
+                      <button class="icon-btn" [title]="'common.delete' | t" (click)="removeRow(r)"><lucide-icon [img]="icons.X" [size]="15" /></button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="no-results">{{ 'recipients.noResults' | t }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+</main>
+
+<!-- Sending / results modal -->
+@if (showModal && run) {
+  <div class="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      @if (sending) {
+        <app-lottie class="modal-anim" [data]="sendingAnimation" [loop]="true" />
+        <h3>{{ 'modal.sendingTitle' | t }}</h3>
+        <p class="modal-sub">
+          {{ 'modal.progress' | t: { done: run.sent + run.failed, total: run.total } }}
+          @if (current) { — <span dir="ltr">{{ current.email }}</span> }
+        </p>
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="runProgress"></div>
+        </div>
+        <div class="modal-counts">
+          <span class="ok"><lucide-icon [img]="icons.CircleCheck" [size]="16" /> {{ 'modal.ok' | t: { n: run.sent } }}</span>
+          <span class="bad"><lucide-icon [img]="icons.CircleX" [size]="16" /> {{ 'modal.fail' | t: { n: run.failed } }}</span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-outline-danger" (click)="stop()">
+            <lucide-icon [img]="icons.CircleStop" [size]="18" /> {{ 'modal.stop' | t }}
+          </button>
+        </div>
+      } @else {
+        <button class="icon-btn modal-close" [title]="'common.close' | t" (click)="closeModal()"><lucide-icon [img]="icons.X" [size]="18" /></button>
+        <app-lottie class="modal-anim" [data]="resultAnimation" />
+        <h3>{{ resultTitleKey | t }}</h3>
+        @if (run.limit; as limit) {
+          <div class="limit-box">
+            <p>{{ 'limit.message' | t: { sent: run.sent, remaining: waiting } }}</p>
+            <p class="limit-hint">{{ 'limit.hint' | t }}</p>
+            @if (limit.detail) {
+              <p class="limit-reply"><span>{{ 'limit.serverReply' | t }}</span> <code dir="ltr">{{ limit.detail }}</code></p>
+            }
+          </div>
+        }
+        <div class="result-grid">
+          <button class="result ok" (click)="showDetails('sent')">
+            <span class="result-value">{{ run.sent }}</span>
+            <span>{{ 'modal.sent' | t }}</span>
+          </button>
+          <button class="result bad" (click)="showDetails('failed')" [disabled]="run.failed === 0">
+            <span class="result-value">{{ run.failed }}</span>
+            <span>{{ 'modal.failed' | t }}</span>
+          </button>
+          <div class="result">
+            <span class="result-value">{{ run.total - run.sent - run.failed }}</span>
+            <span>{{ 'modal.notSent' | t }}</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" (click)="exportReport()">
+            <lucide-icon [img]="icons.Download" [size]="18" /> {{ 'modal.download' | t }}
+          </button>
+          @if (count('failed') > 0) {
+            <button class="btn btn-outline-danger" (click)="retryFailed()">
+              <lucide-icon [img]="icons.RotateCcw" [size]="18" /> {{ 'run.retry' | t }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- Confirm dialog (replaces the browser's confirm(), which ignores the page's language direction) -->
+@if (confirmDialog; as d) {
+  <div class="modal-backdrop confirm-backdrop" (click)="cancelConfirm()">
+    <div class="modal confirm" [class.danger]="d.tone === 'danger'" role="alertdialog" aria-modal="true"
+         aria-labelledby="confirm-title" aria-describedby="confirm-message" (click)="$event.stopPropagation()">
+      <span class="confirm-icon"><lucide-icon [class.flip]="d.tone === 'danger'" [img]="d.icon" [size]="26" /></span>
+      <h3 id="confirm-title">{{ d.title }}</h3>
+      <p id="confirm-message" class="confirm-message">{{ d.message }}</p>
+      @if (d.note) {
+        <p class="confirm-note"><lucide-icon [img]="icons.CircleCheck" [size]="16" /> {{ d.note }}</p>
+      }
+      <div class="confirm-actions">
+        <button #confirmButton class="btn" [class.btn-primary]="d.tone === 'primary'" [class.btn-danger]="d.tone === 'danger'"
+                (click)="confirm()">
+          {{ d.confirmText }}
+        </button>
+        <button class="btn btn-outline" (click)="cancelConfirm()">{{ 'common.cancel' | t }}</button>
+      </div>
+    </div>
+  </div>
+}
