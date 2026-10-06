@@ -4,6 +4,7 @@ const STORAGE_KEY = 'bulk-email:state';
 export interface SavedRow {
   name: string;
   email: string;
+  phone?: string;
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'bounced';
   failure?: { reason: string; detail?: string };
   error?: string; // older saved data: a plain failure message
@@ -18,6 +19,8 @@ export interface SavedState {
   subject: string;
   body: string;
   emailLang?: 'ar' | 'en'; // missing in data saved before email languages existed
+  channel?: 'email' | 'whatsapp';
+  waMessage?: string;
   rows: SavedRow[];
   run: { total: number; sent: number; failed: number; limit?: { detail?: string } } | null;
 }

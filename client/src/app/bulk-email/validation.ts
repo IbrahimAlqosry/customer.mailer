@@ -7,6 +7,7 @@ export const LIMITS = {
   bodyHtml: 200_000,     // characters of editor HTML
   fileMb: 5,
   recipients: 5_000,     // customers per file
+  whatsappMessage: 1_000, // characters (same limit as the server)
 };
 
 export const ACCEPTED_FILE = /\.(xlsx|xls|csv)$/i;

@@ -1,29 +1,51 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <span class="brand-icon"><lucide-icon [img]="icons.Mail" [size]="26" /></span>
-      <div>
+      <span class="brand-icon"><lucide-icon [img]="icons.Mail" [size]="24" /></span>
+      <div class="brand-text">
         <h1>{{ 'app.name' | t }}</h1>
         <p>{{ 'app.tagline' | t }}</p>
       </div>
     </div>
 
-    <div class="topbar-actions">
+    <nav class="view-nav" [attr.aria-label]="'nav.label' | t">
+      <button type="button" [class.active]="view === 'bulk'" [attr.aria-current]="view === 'bulk' ? 'page' : null" (click)="setView('bulk')">
+        <lucide-icon [img]="icons.Users" [size]="17" /> {{ 'nav.bulk' | t }}
+      </button>
+      <button type="button" [class.active]="view === 'single'" [attr.aria-current]="view === 'single' ? 'page' : null" (click)="setView('single')">
+        <lucide-icon [img]="icons.User" [size]="17" /> {{ 'nav.single' | t }}
+      </button>
+    </nav>
+
+    <!-- Date/time and server status -->
+    <div class="topbar-meta">
+      <app-clock />
       @if (serverDown) {
-        <span class="server-pill down"><lucide-icon [img]="icons.CircleX" [size]="16" /> {{ 'header.serverDown' | t }}</span>
+        <span class="server-pill down"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ 'header.serverDown' | t }}</span>
       } @else if (server) {
         <span class="server-pill" [class.down]="!server.smtpReady" [title]="server.from">
-          <lucide-icon [img]="server.smtpReady ? icons.CircleCheck : icons.TriangleAlert" [size]="16" />
+          <lucide-icon [img]="server.smtpReady ? icons.CircleCheck : icons.TriangleAlert" [size]="15" />
           {{ (server.smtpReady ? 'header.ready' : 'header.smtpIncomplete') | t }}
         </span>
       }
-      <button class="lang-btn" (click)="i18n.toggle()" [title]="'lang.switchTitle' | t">
-        <lucide-icon [img]="icons.Languages" [size]="16" /> {{ 'lang.switchTo' | t }}
+    </div>
+
+    <!-- Theme, language, account -->
+    <div class="topbar-actions">
+      <button type="button" class="icon-pill" (click)="theme.toggle()"
+              [title]="(theme.theme() === 'dark' ? 'theme.toLight' : 'theme.toDark') | t"
+              [attr.aria-label]="(theme.theme() === 'dark' ? 'theme.toLight' : 'theme.toDark') | t">
+        <lucide-icon [img]="theme.theme() === 'dark' ? icons.Sun : icons.Moon" [size]="17" />
+      </button>
+      <button type="button" class="lang-btn" (click)="i18n.toggle()" [title]="'lang.switchTitle' | t">
+        <lucide-icon [img]="icons.Languages" [size]="16" />
+        <span class="lang-full">{{ 'lang.switchTo' | t }}</span>
+        <span class="lang-short" aria-hidden="true">{{ 'lang.short' | t }}</span>
       </button>
       <div class="user-chip">
-        <span class="avatar">{{ auth.username().charAt(0).toUpperCase() }}</span>
+        <span class="avatar" [title]="auth.username()">{{ auth.username().charAt(0).toUpperCase() }}</span>
         <span class="user-name">{{ auth.username() }}</span>
-        <button class="logout" [title]="'header.logout' | t" (click)="logout()">
+        <button type="button" class="logout" [title]="'header.logout' | t" [attr.aria-label]="'header.logout' | t" (click)="logout()">
           <lucide-icon class="flip" [img]="icons.LogOut" [size]="17" />
         </button>
       </div>
@@ -31,6 +53,11 @@
   </div>
 </header>
 
+@if (view === 'single') {
+  <main class="page">
+    <app-quick-send [server]="server" />
+  </main>
+} @else {
 <main class="page">
   <!-- Stats -->
   <section class="stats">
@@ -153,6 +180,29 @@
         <h2>{{ 'compose.step' | t }}</h2>
       </div>
 
+      <span class="field-label" id="channel-label">{{ 'channel.label' | t }}</span>
+      <div class="segmented channels" role="radiogroup" aria-labelledby="channel-label">
+        <button type="button" role="radio" [attr.aria-checked]="channel === 'email'" [class.active]="channel === 'email'"
+                [disabled]="sending" (click)="setChannel('email')">
+          <lucide-icon [img]="icons.Mail" [size]="17" /> {{ 'channel.email' | t }}
+        </button>
+        <button type="button" role="radio" [attr.aria-checked]="channel === 'whatsapp'" [class.active]="channel === 'whatsapp'"
+                class="wa" [disabled]="sending || !whatsappReady" (click)="setChannel('whatsapp')"
+                [title]="whatsappReady ? '' : ('channel.waUnavailable' | t)">
+          <lucide-icon [img]="icons.MessageCircle" [size]="17" /> {{ 'channel.whatsapp' | t }}
+        </button>
+      </div>
+
+      @if (channel === 'whatsapp' && server?.whatsappReachable === false) {
+        <div class="wa-unreachable" role="alert">
+          <lucide-icon [img]="icons.TriangleAlert" [size]="18" />
+          <div>
+            <strong>{{ 'channel.waUnreachable' | t }}</strong>
+            @if (server?.whatsappError) { <code dir="ltr">{{ server?.whatsappError }}</code> }
+          </div>
+        </div>
+      }
+
       <span class="field-label" id="email-lang-label">{{ 'compose.language' | t }}</span>
       <div class="segmented" role="radiogroup" aria-labelledby="email-lang-label">
         @for (lang of languages; track lang) {
@@ -162,7 +212,43 @@
           </button>
         }
       </div>
-      <p class="field-hint">{{ 'compose.languageHint' | t }}</p>
+      <p class="field-hint">{{ (channel === 'whatsapp' ? 'compose.waLanguageHint' : 'compose.languageHint') | t }}</p>
+
+      @if (channel === 'whatsapp') {
+        <div class="label-row">
+          <label class="field-label" for="wa-message">{{ 'compose.waMessage' | t }} <span class="required" aria-hidden="true">*</span></label>
+          <span class="counter" [class.over]="waMessage.trim().length > limits.whatsappMessage" dir="ltr">{{ waMessage.trim().length }}/{{ limits.whatsappMessage }}</span>
+        </div>
+        <textarea #waInput id="wa-message" class="input wa-text" rows="7" [dir]="emailDir" [(ngModel)]="waMessage" (ngModelChange)="persist()"
+                  (blur)="waTouched = true" [class.invalid]="showWaError" [attr.aria-invalid]="showWaError" aria-describedby="wa-error"
+                  [disabled]="sending" [placeholder]="'compose.waPlaceholder' | t"></textarea>
+        <div class="wa-tools">
+          <button type="button" class="chip-btn ghost" (click)="insertWaName(waInput)" [disabled]="sending">
+            + {{ 'compose.waInsertName' | t }}
+          </button>
+          <span class="field-hint">{{ 'compose.waHint' | t }}</span>
+        </div>
+        @if (showWaError && waError; as e) {
+          <p class="field-error" id="wa-error" role="alert"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+        }
+
+        <div class="preview">
+          <div class="preview-head">
+            <span class="preview-label"><lucide-icon [img]="icons.Eye" [size]="14" /> {{ 'compose.preview' | t }}</span>
+            <span class="preview-subject"><lucide-icon [img]="icons.MessageCircle" [size]="14" /> WhatsApp</span>
+          </div>
+          <div class="wa-chat">
+            <div class="wa-bubble" [dir]="emailDir">
+              <span class="wa-greeting">{{ waGreeting }}</span>
+              @if (waMessage.trim()) {
+                <span class="wa-text-out">{{ waPreview }}</span>
+              } @else {
+                <span class="preview-empty">{{ 'compose.bodyEmpty' | t }}</span>
+              }
+            </div>
+          </div>
+        </div>
+      } @else {
 
       <div class="label-row">
         <label class="field-label" for="subject">{{ 'compose.subject' | t }} <span class="required" aria-hidden="true">*</span></label>
@@ -238,12 +324,14 @@
         </div>
       </div>
 
-      <button class="btn btn-primary btn-block" (click)="send()" [disabled]="sending">
+      }
+
+      <button class="btn btn-primary btn-block" [class.btn-wa]="channel === 'whatsapp'" (click)="send()" [disabled]="sending">
         @if (sending) {
           <lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="18" /> {{ 'compose.sending' | t }}
         } @else {
-          <lucide-icon class="flip" [img]="icons.Send" [size]="18" />
-          {{ sendableCount > 0 ? ('compose.sendTo' | t: { n: sendableCount }) : ('compose.send' | t) }}
+          <lucide-icon [class.flip]="channel === 'email'" [img]="channel === 'whatsapp' ? icons.MessageCircle : icons.Send" [size]="18" />
+          {{ sendableCount > 0 ? ((channel === 'whatsapp' ? 'compose.sendWaTo' : 'compose.sendTo') | t: { n: sendableCount }) : ('compose.send' | t) }}
         }
       </button>
     </section>
@@ -303,19 +391,19 @@
               <tr>
                 <th class="col-num">#</th>
                 <th>{{ 'recipients.name' | t }}</th>
-                <th>{{ 'recipients.email' | t }}</th>
+                <th>{{ (channel === 'whatsapp' ? 'recipients.phone' : 'recipients.email') | t }}</th>
                 <th>{{ 'recipients.status' | t }}</th>
                 <th class="col-act"></th>
               </tr>
             </thead>
             <tbody>
-              @for (r of visibleRows; track r.email) {
+              @for (r of visibleRows; track r) {
                 <tr [class.row-failed]="r.status === 'failed'" [class.row-sending]="r.status === 'sending'">
                   <td class="col-num">{{ rows.indexOf(r) + 1 }}</td>
                   <td class="name">{{ r.name || '—' }}</td>
                   <td class="email">
-                    <span dir="ltr">{{ r.email }}</span>
-                    @if (r.issue; as issue) {
+                    <span dir="ltr">{{ contact(r) }}</span>
+                    @if (problem(r); as issue) {
                       <div class="issue" [class.warning]="issue.severity === 'warning'">
                         <lucide-icon [img]="issue.severity === 'error' ? icons.CircleX : icons.TriangleAlert" [size]="13" />
                         <span>{{ issueLabel(issue) }}</span>
@@ -373,6 +461,7 @@
     </section>
   </div>
 </main>
+}
 
 <!-- Sending / results modal -->
 @if (showModal && run) {

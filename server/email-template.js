@@ -148,4 +148,9 @@ function buildEmail({ name, email, subject, bodyHtml, language, brand }) {
   return { text, html };
 }
 
-module.exports = { buildEmail, htmlToText, escapeHtml };
+// The opening line every message starts with (email and WhatsApp share it).
+function greeting(name, language) {
+  return (LANGUAGES[language] || LANGUAGES.ar).greeting(name);
+}
+
+module.exports = { buildEmail, greeting, htmlToText, escapeHtml };

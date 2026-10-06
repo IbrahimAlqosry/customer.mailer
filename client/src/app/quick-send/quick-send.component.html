@@ -1,0 +1,222 @@
+<div class="quick">
+  <header class="intro">
+    <h2>{{ 'single.title' | t }}</h2>
+    <p>{{ 'single.subtitle' | t }}</p>
+  </header>
+
+  <div class="layout">
+    <!-- Form -->
+    <section class="card">
+      <span class="field-label" id="qs-channel-label">{{ 'channel.label' | t }}</span>
+      <div class="segmented channels" role="radiogroup" aria-labelledby="qs-channel-label">
+        <button type="button" role="radio" [attr.aria-checked]="channel === 'email'" [class.active]="channel === 'email'"
+                [disabled]="sending" (click)="setChannel('email')">
+          <lucide-icon [img]="icons.Mail" [size]="17" /> {{ 'channel.email' | t }}
+        </button>
+        <button type="button" role="radio" [attr.aria-checked]="channel === 'whatsapp'" [class.active]="channel === 'whatsapp'"
+                class="wa" [disabled]="sending || !whatsappReady" (click)="setChannel('whatsapp')"
+                [title]="whatsappReady ? '' : ('channel.waUnavailable' | t)">
+          <lucide-icon [img]="icons.MessageCircle" [size]="17" /> {{ 'channel.whatsapp' | t }}
+        </button>
+      </div>
+
+      @if (channel === 'whatsapp' && server?.whatsappReachable === false) {
+        <div class="wa-unreachable" role="alert">
+          <lucide-icon [img]="icons.TriangleAlert" [size]="18" />
+          <div>
+            <strong>{{ 'channel.waUnreachable' | t }}</strong>
+            @if (server?.whatsappError) { <code dir="ltr">{{ server?.whatsappError }}</code> }
+          </div>
+        </div>
+      }
+
+      <span class="field-label" id="qs-lang-label">{{ 'compose.language' | t }}</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="qs-lang-label">
+        @for (l of languages; track l) {
+          <button type="button" role="radio" [attr.aria-checked]="lang === l" [class.active]="lang === l"
+                  [disabled]="sending" (click)="setLang(l)">{{ languageNames[l] }}</button>
+        }
+      </div>
+
+      <div class="section-title"><lucide-icon [img]="icons.User" [size]="16" /> {{ 'single.recipient' | t }}</div>
+
+      <label class="field-label" for="qs-name">{{ 'single.name' | t }}</label>
+      <input id="qs-name" class="input" type="text" maxlength="200" [(ngModel)]="name" [disabled]="sending"
+             [placeholder]="'single.namePlaceholder' | t" />
+
+      @if (channel === 'email') {
+        <label class="field-label" for="qs-email">{{ 'single.email' | t }} <span class="required" aria-hidden="true">*</span></label>
+        <input #recipientInput id="qs-email" class="input" type="email" dir="ltr" autocomplete="off" maxlength="254"
+               [(ngModel)]="email" (ngModelChange)="onEmailChange()" (blur)="checkEmail()" [disabled]="sending"
+               [class.invalid]="show('email', recipientError) || emailBlocked" [attr.aria-invalid]="show('email', recipientError) || emailBlocked"
+               aria-describedby="qs-email-msg" placeholder="name@example.com" />
+        <div id="qs-email-msg">
+          @if (show('email', recipientError) && recipientError; as e) {
+            <p class="field-error"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+          } @else if (checkingEmail) {
+            <p class="field-note"><lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="14" /> {{ 'single.checking' | t }}</p>
+          } @else if (emailIssue) {
+            <div class="issue" [class.warning]="emailIssue.severity === 'warning'">
+              <lucide-icon [img]="emailIssue.severity === 'error' ? icons.CircleX : icons.TriangleAlert" [size]="14" />
+              <span>{{ issueLabel(emailIssue) }}</span>
+              @if (emailIssue.suggestion) {
+                <span class="suggestion">{{ 'issue.suggest' | t: { email: emailIssue.suggestion } }}</span>
+                <button type="button" class="chip-btn" (click)="applySuggestion()" [disabled]="sending">
+                  <lucide-icon [img]="icons.Wand" [size]="12" /> {{ 'issue.fix' | t }}
+                </button>
+              }
+            </div>
+          } @else if (emailChecked && emailChecked === email.trim().toLowerCase()) {
+            <p class="field-ok"><lucide-icon [img]="icons.CircleCheck" [size]="14" /> {{ 'single.emailOk' | t }}</p>
+          }
+        </div>
+      } @else {
+        <label class="field-label" for="qs-phone">{{ 'single.phone' | t }} <span class="required" aria-hidden="true">*</span></label>
+        <input #recipientInput id="qs-phone" class="input" type="tel" dir="ltr" autocomplete="off" maxlength="40"
+               [(ngModel)]="phone" (blur)="touched.phone = true" [disabled]="sending"
+               [class.invalid]="show('phone', recipientError)" [attr.aria-invalid]="show('phone', recipientError)"
+               aria-describedby="qs-phone-msg" [placeholder]="'single.phonePlaceholder' | t" />
+        <div id="qs-phone-msg">
+          @if (show('phone', recipientError) && recipientError; as e) {
+            <p class="field-error"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+          } @else if (normalizedPhone) {
+            <p class="field-note">{{ 'single.phoneWillSend' | t }} <bdi dir="ltr">{{ normalizedPhone }}</bdi></p>
+          }
+        </div>
+      }
+
+      <div class="section-title"><lucide-icon [img]="icons.Send" [size]="16" class="flip" /> {{ 'compose.step' | t }}</div>
+
+      @if (channel === 'email') {
+        <div class="label-row">
+          <label class="field-label" for="qs-subject">{{ 'compose.subject' | t }} <span class="required" aria-hidden="true">*</span></label>
+          <span class="counter" [class.over]="subject.trim().length > limits.subject" dir="ltr">{{ subject.trim().length }}/{{ limits.subject }}</span>
+        </div>
+        <input #subjectInput id="qs-subject" class="input" type="text" [dir]="dir" [(ngModel)]="subject" (blur)="touched.subject = true"
+               [class.invalid]="show('subject', subjectError)" [disabled]="sending" [placeholder]="'compose.subjectPlaceholder' | t" />
+        @if (show('subject', subjectError) && subjectError; as e) {
+          <p class="field-error"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+        }
+
+        <label class="field-label">{{ 'compose.body' | t }} <span class="required" aria-hidden="true">*</span></label>
+        <quill-editor class="editor" [class.ltr]="dir === 'ltr'" [class.invalid]="show('body', bodyError)" [(ngModel)]="body"
+                      [disabled]="sending" format="html" (onBlur)="touched.body = true" [placeholder]="'compose.bodyPlaceholder' | t"
+                      (onEditorCreated)="onEditorCreated($event)" (onContentChanged)="onEditorChanged($event)">
+          <div quill-editor-toolbar>
+            <span class="ql-formats">
+              <button class="ql-bold" [title]="'editor.bold' | t"></button>
+              <button class="ql-italic" [title]="'editor.italic' | t"></button>
+              <button class="ql-underline" [title]="'editor.underline' | t"></button>
+            </span>
+            <span class="ql-formats">
+              <select class="ql-color" [title]="'editor.color' | t"></select>
+            </span>
+            <span class="ql-formats">
+              <button class="ql-list" value="ordered" [title]="'editor.ordered' | t"></button>
+              <button class="ql-list" value="bullet" [title]="'editor.bullet' | t"></button>
+            </span>
+            <span class="ql-formats">
+              <button class="ql-link" [title]="'editor.link' | t"></button>
+              <button class="ql-clean" [title]="'editor.clean' | t"></button>
+            </span>
+          </div>
+        </quill-editor>
+        @if (show('body', bodyError) && bodyError; as e) {
+          <p class="field-error"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+        }
+      } @else {
+        <div class="label-row">
+          <label class="field-label" for="qs-wa">{{ 'compose.waMessage' | t }} <span class="required" aria-hidden="true">*</span></label>
+          <span class="counter" [class.over]="waMessage.trim().length > limits.whatsappMessage" dir="ltr">{{ waMessage.trim().length }}/{{ limits.whatsappMessage }}</span>
+        </div>
+        <textarea #waInput id="qs-wa" class="input wa-text" rows="6" [dir]="dir" [(ngModel)]="waMessage" (blur)="touched.wa = true"
+                  [class.invalid]="show('wa', waError)" [disabled]="sending" [placeholder]="'compose.waPlaceholder' | t"></textarea>
+        @if (show('wa', waError) && waError; as e) {
+          <p class="field-error"><lucide-icon [img]="icons.CircleX" [size]="15" /> {{ e.key | t: e.params }}</p>
+        }
+      }
+
+      <button type="button" class="btn btn-primary btn-block" [class.btn-wa]="channel === 'whatsapp'" (click)="send()" [disabled]="sending">
+        @if (sending) {
+          <lucide-icon class="spin" [img]="icons.LoaderCircle" [size]="18" /> {{ 'compose.sending' | t }}
+        } @else {
+          <lucide-icon [class.flip]="channel === 'email'" [img]="channel === 'whatsapp' ? icons.MessageCircle : icons.Send" [size]="18" />
+          {{ (channel === 'whatsapp' ? 'single.sendWa' : 'single.sendEmail') | t }}
+        }
+      </button>
+
+      @if (result; as r) {
+        <div class="result" [class.ok]="r.ok" role="status">
+          <lucide-icon [img]="r.ok ? icons.CircleCheck : icons.CircleX" [size]="20" />
+          <div class="result-text">
+            <strong>{{ (r.ok ? 'single.sentTo' : 'single.failedTo') | t }} <bdi dir="ltr">{{ r.to }}</bdi></strong>
+            @if (r.failure; as f) {
+              <span>{{ failureText(f) }}</span>
+              @if (f.detail) { <code dir="ltr">{{ f.detail }}</code> }
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- Preview + recent -->
+    <div class="side">
+      <section class="card">
+        <div class="side-title"><lucide-icon [img]="icons.Eye" [size]="16" /> {{ 'compose.preview' | t }}</div>
+        @if (channel === 'email') {
+          <div class="mail-preview">
+            <div class="mail-head" [dir]="dir">
+              <span class="mail-brand">{{ server?.fromName || 'Skey ERP' }}</span>
+              <span class="mail-subject">{{ subject || ('compose.noSubject' | t) }}</span>
+            </div>
+            <div class="mail-body" [dir]="dir">
+              <p class="greeting">{{ greeting }}</p>
+              @if (bodyText) {
+                <div class="preview-html" [innerHTML]="previewHtml"></div>
+              } @else {
+                <p class="preview-empty">{{ 'compose.bodyEmpty' | t }}</p>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="wa-chat">
+            <div class="wa-bubble" [dir]="dir">
+              <span class="wa-greeting">{{ greeting }}</span>
+              @if (waMessage.trim()) {
+                <span class="wa-text-out">{{ waMessage }}</span>
+              } @else {
+                <span class="preview-empty">{{ 'compose.bodyEmpty' | t }}</span>
+              }
+            </div>
+          </div>
+        }
+      </section>
+
+      <section class="card">
+        <div class="side-title"><lucide-icon [img]="icons.History" [size]="16" /> {{ 'single.recent' | t }}</div>
+        @if (recent.length === 0) {
+          <p class="empty">{{ 'single.recentEmpty' | t }}</p>
+        } @else {
+          <ul class="recent">
+            @for (s of recent; track s) {
+              <li>
+                <span class="recent-icon" [class.wa]="s.channel === 'whatsapp'">
+                  <lucide-icon [img]="s.channel === 'whatsapp' ? icons.MessageCircle : icons.Mail" [size]="15" />
+                </span>
+                <div class="recent-text">
+                  <strong>{{ s.name || '—' }}</strong>
+                  <span dir="ltr">{{ s.to }}</span>
+                  @if (s.failure; as f) { <span class="bad">{{ failureText(f) }}</span> }
+                </div>
+                <span class="badge" [class.badge-sent]="s.ok" [class.badge-failed]="!s.ok">
+                  {{ (s.ok ? 'status.sent' : 'status.failed') | t }}
+                </span>
+                <span class="recent-time">{{ time(s.at) }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+  </div>
+</div>

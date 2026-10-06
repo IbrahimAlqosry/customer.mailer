@@ -1,13 +1,23 @@
 <div class="login">
   <!-- Form side -->
   <section class="form-side">
+    <app-clock class="login-clock" />
     <div class="form-wrap">
       <div class="logo">
         <span class="logo-icon"><lucide-icon [img]="icons.Mail" [size]="24" /></span>
         <span class="logo-text">{{ 'app.name' | t }}</span>
-        <button type="button" class="lang-btn" (click)="i18n.toggle()" [title]="'lang.switchTitle' | t">
-          <lucide-icon [img]="icons.Languages" [size]="16" /> {{ 'lang.switchTo' | t }}
-        </button>
+        <div class="logo-actions">
+          <button type="button" class="theme-btn" (click)="theme.toggle()"
+                  [title]="(theme.theme() === 'dark' ? 'theme.toLight' : 'theme.toDark') | t"
+                  [attr.aria-label]="(theme.theme() === 'dark' ? 'theme.toLight' : 'theme.toDark') | t">
+            <lucide-icon [img]="theme.theme() === 'dark' ? icons.Sun : icons.Moon" [size]="17" />
+          </button>
+          <button type="button" class="lang-btn" (click)="i18n.toggle()" [title]="'lang.switchTitle' | t">
+            <lucide-icon [img]="icons.Languages" [size]="16" />
+            <span class="lang-full">{{ 'lang.switchTo' | t }}</span>
+            <span class="lang-short" aria-hidden="true">{{ 'lang.short' | t }}</span>
+          </button>
+        </div>
       </div>
 
       <div class="heading">

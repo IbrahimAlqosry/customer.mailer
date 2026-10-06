@@ -1,37 +1,128 @@
 * { box-sizing: border-box; }
 
+/* ---------- Colour tokens ----------
+   Every component colours itself with these. ThemeService sets <html data-theme="light|dark">. */
+:root {
+  color-scheme: light;
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --surface-3: #f2f4f7;
+  --border: #e4e7ec;
+  --border-soft: #f0f2f5;
+  --border-strong: #d0d5dd;
+  --text: #172033;
+  --text-2: #475467;
+  --muted: #667085;
+  --text-faint: #98a2b3;
+
+  --primary: #2952cc;
+  --primary-dark: #1e3fa3;
+  --primary-soft: #eef2fd;
+  --primary-tint: #f5f8ff;
+  --primary-border: #c9d6f7;
+  --primary-disabled: #a9b9e8;
+  --primary-solid: #2952cc;        /* buttons with white text */
+  --primary-solid-hover: #1e3fa3;
+  --success: #12805c;
+  --success-soft: #e6f6ef;
+  --success-tint: #f6fcf9;
+  --success-border: #c4e8d8;
+  --success-text: #24634c;
+  --danger: #c8322f;
+  --danger-dark: #a82724;
+  --danger-soft: #fdecec;
+  --danger-tint: #fffafa;
+  --danger-border: #f5c2c1;
+  --warn: #b26b00;
+  --warn-text: #93370d;
+  --warn-soft: #fffaeb;
+  --warn-border: #fedf89;
+  --wa: #0f7a4a;
+  --wa-dark: #0b5e39;
+  --wa-chat: #ece5dd;
+  --wa-bubble: #ffffff;
+  --topbar-bg: linear-gradient(135deg, #1e3fa3, #2952cc 60%, #3b6cf0);
+  --shadow: rgba(16, 24, 40, 0.08);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e131d;
+  --surface: #161d2b;
+  --surface-2: #1b2333;
+  --surface-3: #222b3d;
+  --border: #2a3447;
+  --border-soft: #212a3a;
+  --border-strong: #3a465e;
+  --text: #e6eaf2;
+  --text-2: #c2c9d6;
+  --muted: #98a2b3;
+  --text-faint: #6f7a8f;
+
+  --primary: #6d8ff3;
+  --primary-dark: #5a7ee8;
+  --primary-soft: rgba(109, 143, 243, 0.16);
+  --primary-tint: rgba(109, 143, 243, 0.08);
+  --primary-border: rgba(109, 143, 243, 0.4);
+  --primary-disabled: #34436b;
+  --primary-solid: #3a5fd6;
+  --primary-solid-hover: #3051bd;
+  --success: #3ec48f;
+  --success-soft: rgba(62, 196, 143, 0.15);
+  --success-tint: rgba(62, 196, 143, 0.07);
+  --success-border: rgba(62, 196, 143, 0.35);
+  --success-text: #7fd8b4;
+  --danger: #f0807c;
+  --danger-dark: #e5615c;
+  --danger-soft: rgba(240, 128, 124, 0.15);
+  --danger-tint: rgba(240, 128, 124, 0.06);
+  --danger-border: rgba(240, 128, 124, 0.4);
+  --warn: #f2b45a;
+  --warn-text: #f5c27a;
+  --warn-soft: rgba(242, 180, 90, 0.12);
+  --warn-border: rgba(242, 180, 90, 0.38);
+  --wa: #128a55;
+  --wa-dark: #0f7a4a;
+  --wa-chat: #0b141a;
+  --wa-bubble: #1f2c34;
+  --topbar-bg: linear-gradient(135deg, #101b3d, #182c66 60%, #1f3c8c);
+  --shadow: rgba(0, 0, 0, 0.35);
+}
+
 body {
   margin: 0;
   font-family: 'Cairo', Tahoma, Arial, sans-serif;
-  background: #f4f6fa;
-  color: #172033;
+  background: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s, color 0.2s;
 }
 
-button, input, textarea { font-family: inherit; }
+button, input, textarea, select { font-family: inherit; color: inherit; }
 
 /* ---------- Rich text editor (Quill) ---------- */
 .editor .ql-toolbar.ql-snow {
-  border: 1px solid #d0d5dd;
+  border: 1px solid var(--border-strong);
   border-radius: 8px 8px 0 0;
-  background: #f9fafb;
+  background: var(--surface-2);
   padding: 6px 8px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0;
 }
 .editor .ql-toolbar.ql-snow .ql-formats { display: inline-flex; align-items: center; margin: 0; padding: 0 6px; }
-.editor .ql-toolbar.ql-snow .ql-formats + .ql-formats { border-inline-start: 1px solid #e4e7ec; }
-.editor .ql-snow .ql-picker.ql-expanded .ql-picker-label { color: #2952cc; border-color: #d0d5dd; border-radius: 6px; }
+.editor .ql-toolbar.ql-snow .ql-formats + .ql-formats { border-inline-start: 1px solid var(--border); }
+.editor .ql-snow .ql-picker.ql-expanded .ql-picker-label { color: var(--primary); border-color: var(--border-strong); border-radius: 6px; }
 .editor .ql-snow .ql-picker-options { border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14) !important; }
-.editor .ql-snow.ql-toolbar button:hover, .editor .ql-snow .ql-picker-label:hover { color: #2952cc; }
+.editor .ql-snow.ql-toolbar button:hover, .editor .ql-snow .ql-picker-label:hover { color: var(--primary); }
 /* Quill puts its dropdown arrow on the right; flip it when the UI is right-to-left. */
 [dir="rtl"] .editor .ql-snow .ql-picker:not(.ql-color-picker):not(.ql-icon-picker) .ql-picker-label { padding: 0 6px 0 18px; text-align: right; }
 [dir="rtl"] .editor .ql-snow .ql-picker:not(.ql-color-picker):not(.ql-icon-picker) .ql-picker-label svg { right: auto; left: 0; }
 [dir="rtl"] .editor .ql-snow .ql-picker-item { text-align: right; }
 .editor .ql-container.ql-snow {
-  border: 1px solid #d0d5dd;
+  border: 1px solid var(--border-strong);
   border-top: none;
   border-radius: 0 0 8px 8px;
-  background: #fff;
+  background: var(--surface);
   font-family: 'Cairo', Tahoma, Arial, sans-serif;
   font-size: 16px;
 }
@@ -42,13 +133,13 @@ button, input, textarea { font-family: inherit; }
 .editor:not(.ltr) .ql-editor ol { padding-left: 0; padding-right: 1.5em; }
 .editor:not(.ltr) .ql-editor li { padding-left: 0; padding-right: 1.5em; }
 .editor:not(.ltr) .ql-editor li > .ql-ui:before { margin-left: 0.3em; margin-right: -1.5em; text-align: left; }
-.editor .ql-editor.ql-blank::before { right: 15px; left: 15px; font-style: normal; color: #98a2b3; }
+.editor .ql-editor.ql-blank::before { right: 15px; left: 15px; font-style: normal; color: var(--text-faint); }
 .editor .ql-editor p { margin: 0; }
 .editor:focus-within .ql-toolbar.ql-snow,
-.editor:focus-within .ql-container.ql-snow { border-color: #2952cc; }
-.editor .ql-disabled .ql-editor { background: #f2f4f7; }
+.editor:focus-within .ql-container.ql-snow { border-color: var(--primary); }
+.editor .ql-disabled .ql-editor { background: var(--surface-3); }
 .editor.invalid .ql-toolbar.ql-snow,
-.editor.invalid .ql-container.ql-snow { border-color: #c8322f; }
+.editor.invalid .ql-container.ql-snow { border-color: var(--danger); }
 
 /* Font & size pickers: wide enough for the labels, each font shown in its own face. */
 .editor .ql-snow .ql-picker.ql-font { width: 96px; }
@@ -66,3 +157,17 @@ button, input, textarea { font-family: inherit; }
 .editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Verdana"]::before { font-family: Verdana; }
 .editor .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Georgia"]::before { font-family: Georgia; }
 .editor .ql-snow .ql-picker.ql-size .ql-picker-item[data-value]::before { font-size: 13px; }
+
+/* ---------- Editor in dark mode ---------- */
+[data-theme="dark"] .editor .ql-snow .ql-stroke { stroke: var(--text-2); }
+[data-theme="dark"] .editor .ql-snow .ql-fill { fill: var(--text-2); }
+[data-theme="dark"] .editor .ql-snow .ql-picker,
+[data-theme="dark"] .editor .ql-snow .ql-picker-label { color: var(--text-2); }
+[data-theme="dark"] .editor .ql-snow .ql-picker-options { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] .editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+[data-theme="dark"] .editor .ql-snow .ql-picker-label:hover .ql-stroke,
+[data-theme="dark"] .editor .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: var(--primary); }
+[data-theme="dark"] .editor .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: var(--primary); }
+[data-theme="dark"] .editor .ql-snow .ql-tooltip { background: var(--surface); color: var(--text); border-color: var(--border); box-shadow: 0 8px 24px var(--shadow); }
+[data-theme="dark"] .editor .ql-snow .ql-tooltip input[type=text] { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+[data-theme="dark"] .editor .ql-editor.ql-blank::before { color: var(--text-faint); }

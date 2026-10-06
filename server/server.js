@@ -4,8 +4,9 @@ const cors = require('cors');
 const nodemailer = require('nodemailer');
 const sanitizeHtml = require('sanitize-html');
 const { login, requireAuth } = require('./auth');
-const { buildEmail, htmlToText } = require('./email-template');
-const { LIMITS, isValidEmail, validateSendRequest, validateEmailList, ValidationError } = require('./validation');
+const { buildEmail, greeting, htmlToText } = require('./email-template');
+const { LIMITS, isValidEmail, validateSendRequest, validateWhatsAppRequest, validateEmailList, ValidationError } = require('./validation');
+const whatsapp = require('./whatsapp');
 const { checkEmails } = require('./email-check');
 const { findBounces } = require('./bounce-check');
 const { reasonFromSmtp } = require('./smtp-reasons');
@@ -140,9 +141,51 @@ app.post('/api/bounces', requireAuth, asyncRoute(async (req, res) => {
   }
 }));
 
-app.get('/api/status', requireAuth, (req, res) => {
-  res.json({ smtpReady, from: process.env.SMTP_USER, fromName: process.env.MAIL_FROM_NAME });
-});
+// WhatsApp messages through the Sms4Crm gateway: one message per customer, opening with the same
+// greeting as the email ("عزيزي العميل / Name" or "Dear Name,"); "{name}" / "{الاسم}" is filled in too.
+app.post('/api/send-whatsapp', requireAuth, asyncRoute(async (req, res) => {
+  if (!whatsapp.isWhatsAppConfigured()) {
+    return res.status(503).json({ code: 'WHATSAPP_NOT_CONFIGURED', message: 'WhatsApp is not configured on the server.' });
+  }
+  const { message, language, recipients } = validateWhatsAppRequest(req.body);
+  const results = [];
+  let limitHit = false;
+  for (const { name, phone: rawPhone } of recipients) {
+    const phone = whatsapp.normalizePhone(rawPhone);
+    if (limitHit) {
+      results.push({ name, phone: phone || rawPhone, success: false, skipped: true, reason: 'RATE_LIMIT', error: 'Not attempted: sending limit reached' });
+      continue;
+    }
+    if (!phone) {
+      results.push({ name, phone: rawPhone, success: false, reason: 'WA_BAD_NUMBER', error: 'Invalid phone number' });
+      continue;
+    }
+    const text = `${greeting(name, language)}\n\n${message.replace(/\{\s*(name|الاسم)\s*\}/gi, name || '')}`;
+    const result = await whatsapp.sendWhatsApp({ phone, message: text, language });
+    limitHit = result.reason === 'RATE_LIMIT';
+    results.push({ name, phone, ...result });
+  }
+  const sent = results.filter(r => r.success).length;
+  res.json({ total: results.length, sent, failed: results.length - sent, results });
+}));
+
+app.get('/api/status', requireAuth, asyncRoute(async (req, res) => {
+  // Re-test the WhatsApp gateway when the last result is old (or was a failure a while ago).
+  const gw = whatsapp.gatewayStatus();
+  const age = gw.checkedAt ? Date.now() - new Date(gw.checkedAt).getTime() : Infinity;
+  if (whatsapp.isWhatsAppConfigured() && (age > 5 * 60_000 || (!gw.reachable && age > 30_000))) await whatsapp.checkGateway();
+  const gateway = whatsapp.gatewayStatus();
+  res.json({
+    smtpReady,
+    from: process.env.SMTP_USER,
+    fromName: process.env.MAIL_FROM_NAME,
+    whatsappReady: whatsapp.isWhatsAppConfigured(),
+    whatsappCountryCode: whatsapp.config().countryCode,
+    // Can this server actually reach the WhatsApp gateway? (null = not checked yet)
+    whatsappReachable: gateway.reachable,
+    whatsappError: gateway.error,
+  });
+}));
 
 // Errors as JSON with a code (validation, malformed JSON, oversized body), never an HTML error page.
 app.use((err, req, res, next) => {
@@ -159,6 +202,11 @@ const port = process.env.PORT || 3000;
 transporter.verify()
   .then(() => { smtpReady = true; console.log('SMTP connection OK'); })
   .catch(err => console.error('SMTP connection failed:', err.message));
+if (whatsapp.isWhatsAppConfigured()) {
+  whatsapp.checkGateway().then(r => (r.reachable
+    ? console.log(`WhatsApp gateway OK (${r.ms} ms)`)
+    : console.error(`WhatsApp gateway NOT reachable from this server: ${r.error}`)));
+}
 
 // Local-only by default: in production IIS is the public entry point and forwards /api here.
 const host = process.env.HOST || '127.0.0.1';

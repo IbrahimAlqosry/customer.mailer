@@ -6,8 +6,11 @@ import { Language } from '../i18n/translations';
 
 export interface Customer {
   name: string;
-  email: string;
+  email: string;  // '' when the file has no valid email for this customer
+  phone?: string; // as typed in the file; the server normalises it for WhatsApp
 }
+
+export type Channel = 'email' | 'whatsapp';
 
 export interface SendResult {
   name: string;
@@ -19,7 +22,9 @@ export interface SendResult {
 }
 
 // Pre-send address check (server/email-check.js).
-export type IssueCode = 'INVALID_SYNTAX' | 'FAKE' | 'DISPOSABLE' | 'DOMAIN_NOT_FOUND' | 'NO_MX' | 'TYPO';
+export type IssueCode = 'INVALID_SYNTAX' | 'FAKE' | 'DISPOSABLE' | 'DOMAIN_NOT_FOUND' | 'NO_MX' | 'TYPO'
+  // The customer has no contact for the chosen channel.
+  | 'NO_EMAIL' | 'NO_PHONE';
 
 export interface EmailIssue {
   code: IssueCode;
@@ -51,6 +56,10 @@ export interface ServerStatus {
   smtpReady: boolean;
   from: string;
   fromName: string;
+  whatsappReady?: boolean;
+  whatsappCountryCode?: string;
+  whatsappReachable?: boolean | null; // can the server reach the WhatsApp gateway?
+  whatsappError?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -64,6 +73,11 @@ export class EmailService {
   // `body` is HTML from the rich text editor; `language` sets the email's greeting and direction.
   sendEmails(subject: string, body: string, recipients: Customer[], language: Language): Observable<SendResponse> {
     return this.http.post<SendResponse>(`${API_URL}/send-emails`, { subject, body, recipients, language });
+  }
+
+  // Plain-text WhatsApp message; "{الاسم}" / "{name}" is replaced with each customer's name on the server.
+  sendWhatsApp(message: string, recipients: { name: string; phone: string }[], language: Language): Observable<SendResponse> {
+    return this.http.post<SendResponse>(`${API_URL}/send-whatsapp`, { message, recipients, language });
   }
 
   verifyEmails(emails: string[]): Observable<{ results: EmailCheck[] }> {

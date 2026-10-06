@@ -8,6 +8,7 @@ const LIMITS = {
   email: 254,            // RFC 5321 maximum
   recipientsPerRequest: 50,
   verifyPerRequest: 1000,
+  whatsappMessage: 1000, // characters; WhatsApp template parameters are capped around 1024
   bounceEmails: 5000,
   credential: 200,
 };
@@ -69,6 +70,33 @@ function validateSendRequest(body) {
   return { subject: cleanSubject, html, recipients: cleanRecipients, language };
 }
 
+function validateWhatsAppRequest(body) {
+  const { message, recipients, language = 'ar' } = body || {};
+  if (typeof message !== 'string' || !message.trim()) {
+    throw new ValidationError('BODY_REQUIRED', 'Message is required.');
+  }
+  if (message.length > LIMITS.whatsappMessage) {
+    throw new ValidationError('BODY_TOO_LONG', `Message must be at most ${LIMITS.whatsappMessage} characters.`, { max: LIMITS.whatsappMessage });
+  }
+  if (!LANGUAGES.includes(language)) {
+    throw new ValidationError('INVALID_LANGUAGE', `Language must be one of: ${LANGUAGES.join(', ')}.`);
+  }
+  if (!Array.isArray(recipients) || recipients.length === 0) {
+    throw new ValidationError('RECIPIENTS_REQUIRED', 'At least one recipient is required.');
+  }
+  if (recipients.length > LIMITS.recipientsPerRequest) {
+    throw new ValidationError('TOO_MANY_RECIPIENTS', `At most ${LIMITS.recipientsPerRequest} recipients per request.`, { max: LIMITS.recipientsPerRequest });
+  }
+  return {
+    message: message.trim(),
+    language,
+    recipients: recipients.map(r => ({
+      name: singleLine(String(r?.name ?? '')).slice(0, LIMITS.name),
+      phone: String(r?.phone ?? '').slice(0, 40),
+    })),
+  };
+}
+
 // A non-empty list of strings (the addresses themselves are checked by the caller).
 function validateEmailList(emails, max) {
   if (!Array.isArray(emails) || emails.length === 0) throw new ValidationError('RECIPIENTS_REQUIRED', 'At least one email is required.');
@@ -85,4 +113,4 @@ function validateLogin(body) {
   return { username, password };
 }
 
-module.exports = { LIMITS, isValidEmail, validateSendRequest, validateEmailList, validateLogin, ValidationError };
+module.exports = { LIMITS, isValidEmail, validateSendRequest, validateWhatsAppRequest, validateEmailList, validateLogin, ValidationError };

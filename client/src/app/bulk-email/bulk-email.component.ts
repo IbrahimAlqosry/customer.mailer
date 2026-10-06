@@ -7,14 +7,17 @@ import type Quill from 'quill';
 import {
   LucideAngularModule, CircleCheck, CircleX, Clock, CloudUpload, Download, FileSpreadsheet, Mail, PenLine,
   RotateCcw, Search, Send, Sparkles, Trash2, Users, X, CircleStop, TriangleAlert, Eye, LoaderCircle, LogOut, Languages,
-  ShieldAlert, Undo2, Wand, MailX, RefreshCw,
+  ShieldAlert, Undo2, Wand, MailX, RefreshCw, MessageCircle, Phone, User, Moon, Sun,
 } from 'lucide-angular';
 import * as XLSX from 'xlsx';
-import { Customer, EmailIssue, EmailService, ServerStatus } from './email.service';
+import { Channel, Customer, EmailIssue, EmailService, ServerStatus } from './email.service';
 import { readCustomers } from './excel-reader';
 import { clearState, loadState, saveState } from './saved-state';
 import { EDITOR_FONTS, EDITOR_SIZES } from './editor-options';
 import { LottieComponent } from '../shared/lottie/lottie.component';
+import { QuickSendComponent } from '../quick-send/quick-send.component';
+import { ClockComponent } from '../shared/clock.component';
+import { ThemeService } from '../shared/theme.service';
 import { AuthService } from '../auth/auth.service';
 import { I18nService, Params } from '../i18n/i18n.service';
 import { ACCEPTED_FILE, LIMITS } from './validation';
@@ -23,6 +26,9 @@ import { LANGUAGE_NAMES, Language, TranslationKey } from '../i18n/translations';
 import { ERROR_ANIMATION, SENDING_ANIMATION, SUCCESS_ANIMATION, WARNING_ANIMATION } from '../shared/lottie/animations';
 
 type Status = 'pending' | 'sending' | 'sent' | 'failed' | 'bounced';
+// The two screens: sending to a whole file, or one message to one person.
+type View = 'bulk' | 'single';
+const VIEW_KEY = 'bulk-email:view';
 type Filter = 'all' | 'sent' | 'failed' | 'pending' | 'issues';
 
 interface Failure {
@@ -69,7 +75,7 @@ const BOUNCE_CHECKS_MS = [30_000, 90_000, 180_000, 300_000];
 @Component({
   selector: 'app-bulk-email',
   standalone: true,
-  imports: [FormsModule, QuillEditorComponent, LucideAngularModule, LottieComponent, TranslatePipe],
+  imports: [FormsModule, QuillEditorComponent, LucideAngularModule, LottieComponent, TranslatePipe, QuickSendComponent, ClockComponent],
   templateUrl: './bulk-email.component.html',
   styleUrl: './bulk-email.component.css',
 })
@@ -77,7 +83,7 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
   readonly icons = {
     CircleCheck, CircleX, Clock, CloudUpload, Download, FileSpreadsheet, Mail, PenLine,
     RotateCcw, Search, Send, Sparkles, Trash2, Users, X, CircleStop, TriangleAlert, Eye, LoaderCircle, LogOut, Languages,
-    ShieldAlert, Undo2, Wand, MailX, RefreshCw,
+    ShieldAlert, Undo2, Wand, MailX, RefreshCw, MessageCircle, Phone, User, Moon, Sun,
   };
   readonly fonts = EDITOR_FONTS;
   readonly sizes = EDITOR_SIZES;
@@ -87,6 +93,7 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
 
   server: ServerStatus | null = null;
   serverDown = false;
+  view: View = readView();
 
   rows: Row[] = [];
   skipped = 0;
@@ -108,8 +115,12 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
   body = '';      // HTML from the editor
   bodyText = '';  // plain text, used to check the body isn't empty
   previewHtml: SafeHtml = '';
-  // Language of the email customers receive. Independent of the UI language.
+  // Language of the message customers receive. Independent of the UI language.
   emailLang: Language;
+  // How customers are contacted. WhatsApp sends plain text (waMessage) to the phone column.
+  channel: Channel = 'email';
+  waMessage = '';
+  waTouched = false;
   private quill?: Quill;
 
   filter: Filter = 'all';
@@ -127,6 +138,7 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
   bodyTouched = false;
   attempted = false;
   @ViewChild('subjectInput') private subjectInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('waInput') private waInput?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('fileSection') private fileSection?: ElementRef<HTMLElement>;
   private sendSub?: Subscription;
 
@@ -135,6 +147,7 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     private sanitizer: DomSanitizer,
     readonly auth: AuthService,
     readonly i18n: I18nService,
+    readonly theme: ThemeService,
   ) {
     this.emailLang = i18n.lang();
   }
@@ -151,6 +164,15 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     this.sendSub?.unsubscribe();
     this.verifySub?.unsubscribe();
     this.clearBounceTimers();
+  }
+
+  setView(view: View): void {
+    this.view = view;
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      // Storage blocked: the choice just won't be remembered.
+    }
   }
 
   logout(): void {
@@ -232,6 +254,11 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
       this.fileName = file.name;
       this.rows = result.customers.map(c => ({ ...c, status: 'pending' }));
       this.skipped = result.skipped;
+      // A file with only phone numbers (or only emails) chooses its channel by itself.
+      const hasEmail = this.rows.some(r => r.email);
+      const hasPhone = this.rows.some(r => r.phone);
+      if (!hasEmail && hasPhone && this.whatsappReady) this.channel = 'whatsapp';
+      else if (hasEmail && !hasPhone) this.channel = 'email';
       this.persist();
       this.verifyRows(this.rows);
     };
@@ -272,7 +299,7 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
   // Asks the server about each address (domain accepts mail, disposable, fake, likely typo).
   // If the check itself fails (e.g. offline), the addresses stay sendable rather than blocked.
   verifyRows(rows: Row[]): void {
-    const pending = rows.filter(r => !r.checked);
+    const pending = rows.filter(r => r.email && !r.checked);
     if (pending.length === 0) return;
     this.verifySub?.unsubscribe();
     this.verifying = true;
@@ -331,7 +358,7 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
   }
 
   removeInvalid(): void {
-    this.rows = this.rows.filter(r => r.issue?.severity !== 'error');
+    this.rows = this.rows.filter(r => this.problem(r)?.severity !== 'error');
     if (this.filter === 'issues' && this.issueCount === 0) this.filter = 'all';
     this.persist();
   }
@@ -402,6 +429,8 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
       subject: this.subject,
       body: this.body,
       emailLang: this.emailLang,
+      channel: this.channel,
+      waMessage: this.waMessage,
       rows: this.rows.map(r => ({ ...r, sentAt: r.sentAt?.toISOString() })),
       run: this.run,
     });
@@ -415,6 +444,8 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     this.subject = saved.subject;
     this.body = saved.body;
     this.emailLang = saved.emailLang ?? 'ar';
+    this.channel = saved.channel ?? 'email';
+    this.waMessage = saved.waMessage ?? '';
     this.run = saved.run;
     this.rows = saved.rows.map(({ error, ...r }) => ({
       ...r,
@@ -437,8 +468,20 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     return this.rows.filter(r => r.status === status).length;
   }
 
+  // What stops a customer from being sent on the current channel: no email / no phone, or the
+  // pre-send email check (email channel only). Null when the customer can be sent to.
+  problem(row: Row): EmailIssue | null {
+    if (this.channel === 'whatsapp') return row.phone ? null : { code: 'NO_PHONE', severity: 'error' };
+    if (!row.email) return { code: 'NO_EMAIL', severity: 'error' };
+    return row.issue ?? null;
+  }
+
   isSendable(row: Row): boolean {
-    return row.status === 'pending' && !row.issue;
+    return row.status === 'pending' && !this.problem(row);
+  }
+
+  contact(row: Row): string {
+    return (this.channel === 'whatsapp' ? row.phone : row.email) || '—';
   }
 
   get sendableCount(): number {
@@ -446,15 +489,15 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
   }
 
   get issueCount(): number {
-    return this.rows.filter(r => r.issue).length;
+    return this.rows.filter(r => this.problem(r)).length;
   }
 
   get invalidCount(): number {
-    return this.rows.filter(r => r.issue?.severity === 'error').length;
+    return this.rows.filter(r => this.problem(r)?.severity === 'error').length;
   }
 
   get reviewCount(): number {
-    return this.rows.filter(r => r.issue?.severity === 'warning').length;
+    return this.rows.filter(r => this.problem(r)?.severity === 'warning').length;
   }
 
   get failedCount(): number {
@@ -467,7 +510,8 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
 
   // The badge shown for a row: its send status, or the check result while it isn't sendable.
   displayStatus(row: Row): string {
-    if (row.status === 'pending' && row.issue) return row.issue.severity === 'error' ? 'invalid' : 'review';
+    const problem = row.status === 'pending' ? this.problem(row) : null;
+    if (problem) return problem.severity === 'error' ? 'invalid' : 'review';
     return row.status;
   }
 
@@ -482,8 +526,8 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
       if (this.filter === 'pending' && !(this.isSendable(r) || r.status === 'sending')) return false;
       if (this.filter === 'sent' && r.status !== 'sent') return false;
       if (this.filter === 'failed' && r.status !== 'failed' && r.status !== 'bounced') return false;
-      if (this.filter === 'issues' && !r.issue) return false;
-      return !q || r.name.toLowerCase().includes(q) || r.email.includes(q);
+      if (this.filter === 'issues' && !this.problem(r)) return false;
+      return !q || r.name.toLowerCase().includes(q) || r.email.includes(q) || (r.phone ?? '').includes(q);
     });
   }
 
@@ -499,6 +543,64 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     return this.run.failed > 0 ? 'modal.resultPartial' : 'modal.resultSuccess';
   }
 
+  // ---------- Channel ----------
+
+  get whatsappReady(): boolean {
+    return !!this.server?.whatsappReady;
+  }
+
+  // Switching channel starts a new round: statuses from the other channel would be misleading.
+  setChannel(channel: Channel): void {
+    if (channel === this.channel || this.sending) return;
+    if (channel === 'whatsapp' && !this.whatsappReady) return;
+    const apply = () => {
+      this.channel = channel;
+      for (const r of this.rows) {
+        if (r.status !== 'pending') { r.status = 'pending'; r.failure = undefined; r.sentAt = undefined; }
+      }
+      this.run = null;
+      this.clearBounceTimers();
+      this.lastBounceCheck = null;
+      this.attempted = false;
+      this.filter = this.issueCount > 0 ? 'issues' : 'all';
+      this.persist();
+    };
+    if (!this.rows.some(r => r.status !== 'pending')) return apply();
+    const t = this.i18n.t.bind(this.i18n);
+    this.confirmDialog = {
+      title: t('channel.switchTitle'),
+      message: t('channel.switchMessage'),
+      note: t('channel.switchNote'),
+      confirmText: t('channel.switchConfirm'),
+      tone: 'primary',
+      icon: channel === 'whatsapp' ? this.icons.MessageCircle : this.icons.Mail,
+      action: apply,
+    };
+  }
+
+  // WhatsApp preview for the first customer, with the name filled in like the server does.
+  // The first customer who has a phone, as the WhatsApp preview's example.
+  private get waSampleName(): string | undefined {
+    return this.rows.find(r => r.phone)?.name || this.rows[0]?.name;
+  }
+
+  get waGreeting(): string {
+    return this.greetingFor(this.waSampleName);
+  }
+
+  get waPreview(): string {
+    return this.waMessage.replace(/\{\s*(name|الاسم)\s*\}/gi, this.waSampleName || this.i18n.t('recipients.name'));
+  }
+
+  insertWaName(textarea: HTMLTextAreaElement): void {
+    const token = this.emailLang === 'ar' ? '{الاسم}' : '{name}';
+    const start = textarea.selectionStart ?? this.waMessage.length;
+    const end = textarea.selectionEnd ?? start;
+    this.waMessage = this.waMessage.slice(0, start) + token + this.waMessage.slice(end);
+    this.persist();
+    setTimeout(() => { textarea.focus(); textarea.setSelectionRange(start + token.length, start + token.length); });
+  }
+
   // ---------- Email language ----------
 
   get emailDir(): 'rtl' | 'ltr' {
@@ -507,7 +609,11 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
 
   // Must match the greeting the server adds (server/email-template.js).
   get previewGreeting(): string {
-    const name = this.rows[0]?.name;
+    return this.greetingFor(this.rows[0]?.name);
+  }
+
+  // Same wording as the server's greeting(), used by both email and WhatsApp.
+  private greetingFor(name: string | undefined): string {
     if (this.emailLang === 'en') return name ? `Dear ${name},` : 'Dear Customer,';
     return name ? `عزيزي العميل / ${name}` : 'عزيزي العميل';
   }
@@ -572,6 +678,16 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     return tooLong ? { key: 'validation.bodyTooLong', params: { max: LIMITS.bodyText } } : null;
   }
 
+  get waError(): Message | null {
+    const text = this.waMessage.trim();
+    if (!text) return { key: 'validation.waRequired' };
+    return text.length > LIMITS.whatsappMessage ? { key: 'validation.waTooLong', params: { max: LIMITS.whatsappMessage } } : null;
+  }
+
+  get showWaError(): boolean {
+    return (this.waTouched || this.attempted) && !!this.waError;
+  }
+
   // A rejected file always shows; "no file / nothing left to send" only after a send attempt.
   get fileMessage(): Message | null {
     return this.fileError ?? (this.attempted ? this.recipientsError : null);
@@ -592,6 +708,13 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
       this.fileSection?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return false;
     }
+    if (this.channel === 'whatsapp') {
+      if (this.waError) {
+        this.waInput?.nativeElement.focus();
+        return false;
+      }
+      return true;
+    }
     if (this.subjectError) {
       this.subjectInput?.nativeElement.focus();
       return false;
@@ -609,16 +732,18 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     const t = this.i18n.t.bind(this.i18n);
     if (this.sending || !this.validateForSend()) return;
     const targets = this.rows.filter(r => this.isSendable(r));
-    const excluded = this.rows.filter(r => r.status === 'pending' && r.issue).length;
+    const excluded = this.rows.filter(r => r.status === 'pending' && this.problem(r)).length;
     const notes = [t('confirm.sendNote')];
     if (excluded > 0) notes.unshift(t('confirm.sendExcluded', { n: excluded }));
     this.confirmDialog = {
       title: t('confirm.sendTitle'),
-      message: `${t('confirm.sendMessage', { n: targets.length, subject: this.subject.trim() })} ${t('confirm.sendLanguage', { language: LANGUAGE_NAMES[this.emailLang] })}`,
-      note: notes.join(' '),
-      confirmText: t('compose.sendTo', { n: targets.length }),
+      message: this.channel === 'whatsapp'
+        ? t('confirm.waMessage', { n: targets.length })
+        : `${t('confirm.sendMessage', { n: targets.length, subject: this.subject.trim() })} ${t('confirm.sendLanguage', { language: LANGUAGE_NAMES[this.emailLang] })}`,
+      note: this.channel === 'whatsapp' ? notes.slice(0, -1).concat(t('confirm.waNote')).join(' ') : notes.join(' '),
+      confirmText: t(this.channel === 'whatsapp' ? 'compose.sendWaTo' : 'compose.sendTo', { n: targets.length }),
       tone: 'primary',
-      icon: this.icons.Send,
+      icon: this.channel === 'whatsapp' ? this.icons.MessageCircle : this.icons.Send,
       action: () => this.sendTo(targets),
     };
   }
@@ -663,6 +788,8 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     const subject = this.subject.trim();
     const body = this.body;
     const language = this.emailLang;
+    const channel = this.channel;
+    const waMessage = this.waMessage.trim();
     this.sending = true;
     this.showModal = true;
     this.attempted = false; // the attempt succeeded; don't keep showing "nothing left to send" afterwards
@@ -674,7 +801,10 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
         concatMap(row => {
           row.status = 'sending';
           this.current = row;
-          return this.emailService.sendEmails(subject, body, [{ name: row.name, email: row.email }], language).pipe(
+          const request = channel === 'whatsapp'
+            ? this.emailService.sendWhatsApp(waMessage, [{ name: row.name, phone: row.phone ?? '' }], language)
+            : this.emailService.sendEmails(subject, body, [{ name: row.name, email: row.email }], language);
+          return request.pipe(
             map(res => {
               const result = res.results[0];
               const failure: Failure | undefined = result?.success
@@ -719,7 +849,8 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
     this.current = null;
     if (this.failedCount > 0) this.filter = 'failed';
     this.persist();
-    if (this.count('sent') > 0) this.scheduleBounceChecks();
+    // Bounce reports only exist for email.
+    if (this.channel === 'email' && this.count('sent') > 0) this.scheduleBounceChecks();
   }
 
   // ---------- Report ----------
@@ -735,17 +866,26 @@ export class BulkEmailComponent implements OnInit, OnDestroy {
       '#': i + 1,
       [t('report.name')]: r.name,
       [t('report.email')]: r.email,
+      [t('report.phone')]: r.phone ?? '',
       [t('report.status')]: t(`status.${this.displayStatus(r)}` as TranslationKey),
-      [t('report.error')]: r.failure ? this.failureText(r.failure) : r.issue ? this.issueLabel(r.issue) : '',
-      [t('report.detail')]: r.failure?.detail ?? (r.issue?.suggestion ? t('issue.suggest', { email: r.issue.suggestion }) : ''),
+      [t('report.error')]: r.failure ? this.failureText(r.failure) : this.problem(r) ? this.issueLabel(this.problem(r)!) : '',
+      [t('report.detail')]: r.failure?.detail ?? (this.problem(r)?.suggestion ? t('issue.suggest', { email: this.problem(r)!.suggestion! }) : ''),
       [t('report.sentAt')]: r.sentAt ? r.sentAt.toLocaleString(rtl ? 'ar-EG-u-nu-latn' : 'en-GB') : '',
     }));
     const sheet = XLSX.utils.json_to_sheet(data);
-    sheet['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 34 }, { wch: 14 }, { wch: 36 }, { wch: 44 }, { wch: 22 }];
+    sheet['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 34 }, { wch: 18 }, { wch: 14 }, { wch: 36 }, { wch: 44 }, { wch: 22 }];
     const book = XLSX.utils.book_new();
     book.Workbook = { Views: [{ RTL: rtl }] };
     XLSX.utils.book_append_sheet(book, sheet, t('report.sheet'));
     const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
     XLSX.writeFile(book, `${t('report.file')}-${stamp}.xlsx`);
+  }
+}
+
+function readView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'single' ? 'single' : 'bulk';
+  } catch {
+    return 'bulk';
   }
 }

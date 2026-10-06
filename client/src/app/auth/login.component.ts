@@ -3,24 +3,29 @@ import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   LucideAngularModule, ChartColumn, CircleAlert, Eye, EyeOff, FileSpreadsheet, KeyRound, LoaderCircle, Lock, LogIn,
-  Languages, Mail, PenLine, ShieldCheck, User,
+  Languages, Mail, PenLine, ShieldCheck, User, Moon, Sun,
 } from 'lucide-angular';
 import { AuthService } from './auth.service';
 import { LottieComponent } from '../shared/lottie/lottie.component';
 import { SENDING_ANIMATION } from '../shared/lottie/animations';
 import { I18nService, Params } from '../i18n/i18n.service';
 import { TranslatePipe } from '../i18n/translate.pipe';
+import { ClockComponent } from '../shared/clock.component';
+import { ThemeService } from '../shared/theme.service';
 import { TranslationKey } from '../i18n/translations';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, LucideAngularModule, LottieComponent, TranslatePipe],
+  imports: [FormsModule, LucideAngularModule, LottieComponent, TranslatePipe, ClockComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })
 export class LoginComponent {
-  readonly icons = { ChartColumn, CircleAlert, Eye, EyeOff, FileSpreadsheet, KeyRound, Languages, LoaderCircle, Lock, LogIn, Mail, PenLine, ShieldCheck, User };
+  readonly icons = {
+    ChartColumn, CircleAlert, Eye, EyeOff, FileSpreadsheet, KeyRound, Languages, LoaderCircle, Lock, LogIn,
+    Mail, PenLine, ShieldCheck, User, Moon, Sun,
+  };
   readonly sendingAnimation = SENDING_ANIMATION;
   readonly year = new Date().getFullYear();
 
@@ -33,7 +38,7 @@ export class LoginComponent {
   error: { key: TranslationKey; params?: Params } | null = null;
   shake = false;
 
-  constructor(private auth: AuthService, readonly i18n: I18nService) {}
+  constructor(private auth: AuthService, readonly i18n: I18nService, readonly theme: ThemeService) {}
 
   onKey(event: KeyboardEvent): void {
     this.capsLock = event.getModifierState?.('CapsLock') ?? false;
