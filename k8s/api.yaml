@@ -1,0 +1,82 @@
+# Customer Mailer API (Node): sends email/WhatsApp, checks addresses, reads bounces.
+# Internal only (ClusterIP): the web pods reach it as http://customer-mailer-api:3000.
+#
+# Settings come from the Secret "customer-mailer-env" (create it first, see README-k8s.md):
+#   kubectl create secret generic customer-mailer-env --from-env-file=k8s/secret.env [-n <namespace>]
+#
+# replicas: 1 on purpose: the failed-login lockout and the WhatsApp gateway check are kept in the
+# process's memory, so one pod keeps them consistent. Sending load is light (one message at a time).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-mailer-api
+  labels:
+    app: customer-mailer
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: customer-mailer
+      component: api
+  template:
+    metadata:
+      labels:
+        app: customer-mailer
+        component: api
+    spec:
+      containers:
+        - name: api
+          # REGISTRY: set to the registry the images are pushed to (see README-k8s.md).
+          image: REGISTRY/customer-mailer-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: customer-mailer-env
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "3000"
+            - name: TRUST_PROXY
+              value: "1"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      imagePullSecrets:
+        - name: registry-creds
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-mailer-api
+  labels:
+    app: customer-mailer
+    component: api
+spec:
+  type: ClusterIP
+  selector:
+    app: customer-mailer
+    component: api
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP

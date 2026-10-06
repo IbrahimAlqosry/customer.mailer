@@ -1,0 +1,71 @@
+# Customer Mailer web (nginx): serves the Angular app and forwards /api/ to the API service.
+# Exposed with a NodePort (like atlas-console): http://<any-node-ip>:30081
+# NODE PORT: pick one that is free on the cluster first:  kubectl get svc -A | grep NodePort
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-mailer-web
+  labels:
+    app: customer-mailer
+    component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: customer-mailer
+      component: web
+  template:
+    metadata:
+      labels:
+        app: customer-mailer
+        component: web
+    spec:
+      containers:
+        - name: web
+          # REGISTRY: set to the registry the images are pushed to (see README-k8s.md).
+          image: REGISTRY/customer-mailer-web:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: API_BACKEND
+              value: http://customer-mailer-api:3000
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      imagePullSecrets:
+        - name: registry-creds
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-mailer-web
+  labels:
+    app: customer-mailer
+    component: web
+spec:
+  type: NodePort
+  selector:
+    app: customer-mailer
+    component: web
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30081
+      protocol: TCP

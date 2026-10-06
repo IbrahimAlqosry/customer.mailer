@@ -1,0 +1,47 @@
+# Templated by the nginx image's entrypoint (envsubst) into /etc/nginx/conf.d/default.conf at
+# container start. API_BACKEND = where the API container is:
+#   - docker compose:  http://api:3000
+#   - Kubernetes:      http://customer-mailer-api:3000  (the API Service name)
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # Excel files are read in the browser, but message bodies can be large rich text.
+    client_max_body_size 6m;
+
+    # The Node API. Each request sends one message, which can take a while on a slow mail server.
+    location /api/ {
+        proxy_pass ${API_BACKEND}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+
+    # Runtime settings and the page itself: always fetch the latest after a new deployment.
+    location = /config.js {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Static assets: long-cache, filenames are content-hashed by the Angular build.
+    location ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|ico)$ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff";
+        add_header X-Frame-Options "SAMEORIGIN";
+        add_header Referrer-Policy "strict-origin-when-cross-origin";
+    }
+}

@@ -19,7 +19,6 @@
             "tsConfig": "tsconfig.json",
             "assets": [
               { "glob": "favicon.svg", "input": "src", "output": "/" },
-              { "glob": "web.config", "input": "src", "output": "/" },
               { "glob": "config.js", "input": "src", "output": "/" }
             ],
             "allowedCommonJsDependencies": ["lottie-web"],

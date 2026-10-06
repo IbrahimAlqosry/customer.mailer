@@ -1,0 +1,26 @@
+# Run the whole app on one Docker server:
+#   1. cp server/.env.example server/.env   and fill in the passwords (never commit .env)
+#   2. docker compose up -d --build
+#   -> http://localhost:8080   (nginx serves the app and forwards /api to the API container)
+services:
+  web:
+    build: ./client
+    image: customer-mailer-web
+    ports:
+      - "8080:80"
+    environment:
+      API_BACKEND: http://api:3000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: ./server
+    image: customer-mailer-api
+    env_file: ./server/.env
+    environment:
+      # Inside the container: listen on all interfaces, one proxy (web) in front.
+      HOST: 0.0.0.0
+      PORT: "3000"
+      TRUST_PROXY: "1"
+    restart: unless-stopped

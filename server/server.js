@@ -12,9 +12,12 @@ const { findBounces } = require('./bounce-check');
 const { reasonFromSmtp } = require('./smtp-reasons');
 
 const app = express();
-// Behind IIS (ARR) every request arrives from 127.0.0.1; trust its X-Forwarded-For header so
-// req.ip is the real visitor (the login lockout counts attempts per visitor IP).
-app.set('trust proxy', 'loopback');
+// Requests arrive through a reverse proxy (IIS ARR on 127.0.0.1, or the nginx container in
+// Docker/Kubernetes); trust its X-Forwarded-For header so req.ip is the real visitor (the login
+// lockout counts attempts per visitor IP). TRUST_PROXY: "loopback" (IIS, default) or a hop count
+// such as "1" (one proxy in front: nginx).
+const trustProxy = process.env.TRUST_PROXY || 'loopback';
+app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
 app.use(express.json({ limit: '5mb' }));
 

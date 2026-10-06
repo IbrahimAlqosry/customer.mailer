@@ -21,3 +21,9 @@ logs/
 .idea/
 Thumbs.db
 .DS_Store
+
+# IIS deployment files (kept locally, never pushed)
+iis/
+
+# Kubernetes secret values (real passwords)
+k8s/secret.env
